@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import useWindowSize from '../hooks/useWindowSize'
+import API_URL from '../config'
 
 function Login() {
   const { theme, switchTheme, currentTheme } = useTheme() // 🎨 theme + switcher
@@ -28,7 +29,7 @@ function Login() {
     setLoading(true)
     setError('')
     try {
-      const res  = await fetch('http://localhost:8000/auth/login', {
+      const res = await fetch(`${API_URL}/auth/login`, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(formData),
