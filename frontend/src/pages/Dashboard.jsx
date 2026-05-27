@@ -7,6 +7,7 @@ import {
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import useWindowSize from '../hooks/useWindowSize'
+import API_URL from '../config'
 
 // 🏷️ Keywords tో auto-category detect cheyyadam
 const CATEGORIES = {
