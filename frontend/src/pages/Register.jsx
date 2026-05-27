@@ -2,24 +2,23 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
+import useWindowSize from '../hooks/useWindowSize'
 
 // 📝 Register page — new user account create chestam
 function Register() {
-  const { theme } = useTheme()   // 🎨 theme teesukuntunnamu
-  const { login } = useAuth()    // 🔐 auto-login after register
-  const navigate = useNavigate() // 🧭 navigation
+  const { theme, switchTheme, currentTheme } = useTheme() // 🎨 theme + switcher
+  const { login } = useAuth()                             // 🔐 auto-login after register
+  const navigate = useNavigate()                          // 🧭 navigation
+  const { isMobile } = useWindowSize()                    // 📱 mobile check
 
-  // 📋 Form state — anni fields ikkade
+  // 📋 Form state
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
+    name: '', email: '', password: '', confirmPassword: '',
   })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [showPass, setShowPass] = useState(false)        // 👁️ password toggle
-  const [showConfirm, setShowConfirm] = useState(false)  // 👁️ confirm password toggle
+  const [loading, setLoading]       = useState(false)
+  const [error, setError]           = useState('')
+  const [showPass, setShowPass]     = useState(false)   // 👁️ password toggle
+  const [showConfirm, setShowConfirm] = useState(false) // 👁️ confirm toggle
 
   // ✏️ Input change — state update + error clear
   function handleChange(e) {
@@ -32,35 +31,30 @@ function Register() {
     e.preventDefault()
     setError('')
 
-    // 🔍 Passwords match avutunnaya check
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match!')
       return
     }
-
-    // 🔍 Minimum length check
     if (formData.password.length < 6) {
       setError('Password must be at least 6 characters')
       return
     }
 
     setLoading(true)
-
     try {
-      const res = await fetch('http://localhost:8000/auth/register', {
-        method: 'POST',
+      const res  = await fetch('http://localhost:8000/auth/register', {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
+        body:    JSON.stringify({
+          name:     formData.name,
+          email:    formData.email,
           password: formData.password,
         }),
       })
-
       const data = await res.json()
 
       if (!res.ok) {
-        setError(data.detail || 'Registration failed') // ❌ backend error
+        setError(data.detail || 'Registration failed')
         setLoading(false)
         return
       }
@@ -70,58 +64,77 @@ function Register() {
       navigate('/dashboard')
 
     } catch (err) {
-      setError('Could not connect to server. Please try again! ') // 🔥 network error
+      setError('Could not connect to server. Please try again!')
     }
-
     setLoading(false)
   }
 
-  // 🌗 dark theme check — error box color kosam
+  // 🌗 dark theme check
   const isDark = theme.name === 'greenDark' || theme.name === 'blueDark'
 
-  // 🎨 All inline styles — Login page tho consistent ga untundi
+  // 🎨 All inline styles — mobile responsive tho
   const S = {
-    // 📄 Full page — center lo card
+    // 📄 Full page
     page: {
       minHeight: '100vh',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '1rem',
+      padding: isMobile ? '1rem' : '2rem',
       backgroundColor: theme.bg,
-      // ✨ Subtle accent glow background lo
       backgroundImage: `radial-gradient(ellipse 600px 500px at 50% 30%, ${theme.accent}14 0%, transparent 70%)`,
+      position: 'relative',
     },
+
+    // 🎨 Theme switcher — top right fixed
+    themeSwitcher: {
+      position: 'fixed',
+      top: '12px',
+      right: '12px',
+      display: 'flex',
+      gap: '6px',
+      zIndex: 100,
+    },
+
+    themeBtn: (active) => ({
+      padding: isMobile ? '4px 10px' : '6px 14px',
+      borderRadius: '8px',
+      fontSize: isMobile ? '11px' : '12px',
+      fontWeight: '500',
+      border: `0.5px solid ${theme.accent}`,
+      backgroundColor: active ? theme.accent : 'transparent',
+      color: active ? '#fff' : theme.subtext,
+      cursor: 'pointer',
+    }),
 
     // 🃏 Register card
     card: {
       width: '100%',
-      maxWidth: '420px',
+      maxWidth: isMobile ? '100%' : '420px',
       backgroundColor: theme.cardBg,
       border: `0.5px solid ${theme.border}`,
-      borderRadius: '20px',
-      padding: '2.5rem 2.25rem',
+      borderRadius: isMobile ? '16px' : '20px',
+      padding: isMobile ? '1.75rem 1.25rem' : '2.5rem 2.25rem',
       boxShadow: theme.shadow,
-      position: 'relative', // badge kosam
+      position: 'relative',
     },
 
-    // 🟢 Secure badge — top right corner
+    // 🟢 Secure badge
     badge: {
       position: 'absolute',
-      top: '16px',
-      right: '16px',
+      top: '14px',
+      right: '14px',
       display: 'flex',
       alignItems: 'center',
       gap: '5px',
       background: `${theme.accent}18`,
       border: `0.5px solid ${theme.accent}40`,
       borderRadius: '20px',
-      padding: '4px 10px',
+      padding: '3px 8px',
       fontSize: '10px',
       color: theme.accent,
     },
 
-    // 💚 Pulsing dot inside badge
     dot: {
       width: '5px',
       height: '5px',
@@ -129,27 +142,26 @@ function Register() {
       backgroundColor: theme.accent,
     },
 
-    // 🏷️ Header section
+    // 🏷️ Header
     header: {
       textAlign: 'center',
-      marginBottom: '2rem',
+      marginBottom: isMobile ? '1.5rem' : '2rem',
     },
 
-    // 🚀 Icon box
     iconWrap: {
-      width: '52px',
-      height: '52px',
+      width: isMobile ? '44px' : '52px',
+      height: isMobile ? '44px' : '52px',
       borderRadius: '14px',
       background: `linear-gradient(135deg, ${theme.accent}, ${theme.accent}88)`,
       display: 'inline-flex',
       alignItems: 'center',
       justifyContent: 'center',
-      fontSize: '24px',
-      marginBottom: '1rem',
+      fontSize: isMobile ? '20px' : '24px',
+      marginBottom: '0.75rem',
     },
 
     title: {
-      fontSize: '1.4rem',
+      fontSize: isMobile ? '1.2rem' : '1.4rem',
       fontWeight: '700',
       color: theme.text,
       margin: '0 0 6px',
@@ -172,10 +184,9 @@ function Register() {
       border: '0.5px solid #7f1d1d',
     },
 
-    // 🏷️ Each field wrapper
+    // 🏷️ Field group
     fieldGroup: { marginBottom: '1rem' },
 
-    // 🔤 Label — uppercase small text
     label: {
       display: 'block',
       fontSize: '11px',
@@ -186,15 +197,13 @@ function Register() {
       letterSpacing: '0.4px',
     },
 
-    // 📦 Icon + input wrapper
     inputWrap: { position: 'relative' },
 
-    // ⌨️ Input field — left padding for icon
     input: {
       width: '100%',
       padding: '0.75rem 1rem 0.75rem 2.5rem',
       borderRadius: '10px',
-      fontSize: '0.875rem',
+      fontSize: isMobile ? '16px' : '0.875rem', // 📱 16px — iOS zoom fix
       outline: 'none',
       backgroundColor: theme.inputBg,
       color: theme.text,
@@ -202,7 +211,6 @@ function Register() {
       boxSizing: 'border-box',
     },
 
-    // 🔣 Left icon inside input
     inputIcon: {
       position: 'absolute',
       left: '12px',
@@ -210,10 +218,9 @@ function Register() {
       transform: 'translateY(-50%)',
       fontSize: '15px',
       color: theme.subtext,
-      pointerEvents: 'none', // click block avvakunda
+      pointerEvents: 'none',
     },
 
-    // 👁️ Eye toggle button — password fields lo
     eyeBtn: {
       position: 'absolute',
       right: '12px',
@@ -231,7 +238,7 @@ function Register() {
     // 🚀 Submit button
     btn: {
       width: '100%',
-      padding: '0.85rem',
+      padding: isMobile ? '0.9rem' : '0.85rem',
       borderRadius: '10px',
       fontSize: '0.9rem',
       fontWeight: '600',
@@ -243,7 +250,7 @@ function Register() {
       marginTop: '0.5rem',
     },
 
-    // 📝 Footer — login link
+    // 📝 Footer
     footer: {
       textAlign: 'center',
       fontSize: '0.8rem',
@@ -260,9 +267,20 @@ function Register() {
 
   return (
     <div style={S.page}>
+
+      {/* 🎨 Theme switcher — top right fixed */}
+      <div style={S.themeSwitcher}>
+        <button onClick={() => switchTheme('light')} style={S.themeBtn(currentTheme === 'light')}>
+          🍦 Light
+        </button>
+        <button onClick={() => switchTheme('greenDark')} style={S.themeBtn(currentTheme === 'greenDark')}>
+          🖤 Dark
+        </button>
+      </div>
+
       <div style={S.card}>
 
-        {/* 🟢 Secure badge — top right */}
+        {/* 🟢 Secure badge */}
         <div style={S.badge}>
           <span style={S.dot} />
           Secure
@@ -275,7 +293,7 @@ function Register() {
           <p style={S.subtitle}>Start tracking your spending today</p>
         </div>
 
-        {/* ❌ Error message */}
+        {/* ❌ Error */}
         {error && <div style={S.errorBox}>{error}</div>}
 
         <form onSubmit={handleSubmit}>
@@ -328,11 +346,7 @@ function Register() {
                 required
                 style={S.input}
               />
-              <button
-                type="button"
-                style={S.eyeBtn}
-                onClick={() => setShowPass(!showPass)}
-              >
+              <button type="button" style={S.eyeBtn} onClick={() => setShowPass(!showPass)}>
                 {showPass ? '🙈' : '👁️'}
               </button>
             </div>
@@ -352,11 +366,7 @@ function Register() {
                 required
                 style={S.input}
               />
-              <button
-                type="button"
-                style={S.eyeBtn}
-                onClick={() => setShowConfirm(!showConfirm)}
-              >
+              <button type="button" style={S.eyeBtn} onClick={() => setShowConfirm(!showConfirm)}>
                 {showConfirm ? '🙈' : '👁️'}
               </button>
             </div>
@@ -369,7 +379,7 @@ function Register() {
 
         </form>
 
-        {/* 📝 Footer — login link, clean English */}
+        {/* 📝 Footer */}
         <p style={S.footer}>
           Already have an account?{' '}
           <Link to="/login" style={S.link}>Login</Link>

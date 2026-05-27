@@ -6,6 +6,7 @@ import {
 } from 'recharts'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
+import useWindowSize from '../hooks/useWindowSize'
 
 // 🏷️ Keywords tో auto-category detect cheyyadam
 const CATEGORIES = {
@@ -19,10 +20,10 @@ const CATEGORIES = {
   Transfer:      ['upi', 'neft', 'imps', 'transfer', 'sent', 'paid'],
 }
 
-// 🎨 Pie chart colors — greenDark theme tho match avutundi
+// 🎨 Pie chart colors
 const PIE_COLORS = ['#22c55e','#16a34a','#4ade80','#86efac','#bbf7d0','#059669','#10b981','#34d399']
 
-// 🔍 Description ni lowercase chesi category detect cheyyadam
+// 🔍 Category detect cheyyadam
 function detectCategory(description) {
   const lower = (description || '').toLowerCase()
   for (const [cat, keywords] of Object.entries(CATEGORIES)) {
@@ -31,28 +32,27 @@ function detectCategory(description) {
   return 'Others'
 }
 
-// 💰 Amount string ni number ga convert — bank CSVs lo commas untayi
+// 💰 Amount parse cheyyadam
 function parseAmount(val) {
   if (!val) return 0
   return parseFloat(String(val).replace(/,/g, '')) || 0
 }
 
 function Dashboard() {
-  const { theme, switchTheme, currentTheme } = useTheme() // 🎨 theme + switcher
-  const { user, logout } = useAuth()                      // 👤 user info
+  const { theme, switchTheme, currentTheme } = useTheme()
+  const { user, logout } = useAuth()
+  const { isMobile } = useWindowSize() // 📱 mobile check
 
-  // 📊 Data states
   const [transactions, setTransactions] = useState([])
   const [fileName, setFileName]         = useState('')
   const [error, setError]               = useState('')
-  const [filterCat, setFilterCat]       = useState('All') // 🔍 category filter
-  const [filterType, setFilterType]     = useState('All') // 🔍 debit/credit filter
-  const [searchText, setSearchText]     = useState('')    // 🔍 search
+  const [filterCat, setFilterCat]       = useState('All')
+  const [filterType, setFilterType]     = useState('All')
+  const [searchText, setSearchText]     = useState('')
 
-  // 🌗 dark theme check
   const isDark = theme.name === 'greenDark' || theme.name === 'blueDark'
 
-  // 📂 CSV upload handle cheyyadam — Union Bank + Standard format support
+  // 📂 CSV upload handle cheyyadam
   function handleUpload(e) {
     const file = e.target.files[0]
     if (!file) return
@@ -64,66 +64,51 @@ function Dashboard() {
       skipEmptyLines: true,
       complete: (results) => {
         const rows = results.data
-        if (!rows.length) {
-          setError('CSV file is empty!')
-          return
-        }
+        if (!rows.length) { setError('CSV file is empty!'); return }
 
-        // 🔍 Column names detect cheyyadam — case insensitive
         const cols      = Object.keys(rows[0]).map(c => c.trim())
         const dateCol   = cols.find(c => /date/i.test(c))
         const descCol   = cols.find(c => /desc|narration|particular|details|remarks/i.test(c))
         const debitCol  = cols.find(c => /^debit$/i.test(c) || /withdrawal/i.test(c))
         const creditCol = cols.find(c => /^credit$/i.test(c) || /deposit/i.test(c))
-        const amountCol = cols.find(c => /^amount$/i.test(c)) // 💰 Union Bank single amount col
+        const amountCol = cols.find(c => /^amount$/i.test(c))
 
-        if (!dateCol) {
-          setError('CSV format not recognized! Date column is required.')
-          return
-        }
+        if (!dateCol) { setError('CSV format not recognized! Date column is required.'); return }
 
         const parsed = rows.map((row, i) => {
-          let debit  = 0
-          let credit = 0
+          let debit = 0, credit = 0
 
           if (amountCol && !debitCol) {
-            // 🏦 Union Bank format — Amount lo (Dr)/(Cr) untundi
             const raw   = String(row[amountCol] || '').trim()
             const match = raw.match(/([\d,]+\.?\d*)\s*\((Dr|Cr)\)/i)
             if (match) {
               const amt = parseFloat(match[1].replace(/,/g, ''))
-              if (match[2].toLowerCase() === 'dr') debit  = amt
-              else                                  credit = amt
+              if (match[2].toLowerCase() === 'dr') debit = amt
+              else credit = amt
             }
           } else {
-            // 📊 Standard format — separate Debit/Credit columns
             debit  = parseAmount(row[debitCol])
             credit = parseAmount(row[creditCol])
           }
 
           return {
-            id:          i,
+            id: i,
             date:        (row[dateCol] || '').trim(),
             description: (row[descCol] || 'Unknown').trim(),
-            debit,
-            credit,
-            category:    detectCategory(row[descCol]),
-            type:        debit > 0 ? 'Debit' : 'Credit',
+            debit, credit,
+            category: detectCategory(row[descCol]),
+            type:     debit > 0 ? 'Debit' : 'Credit',
           }
-        }).filter(t => t.date) // 🔍 Empty rows filter out
+        }).filter(t => t.date)
 
-        if (!parsed.length) {
-          setError('No valid transactions found in CSV!')
-          return
-        }
-
+        if (!parsed.length) { setError('No valid transactions found in CSV!'); return }
         setTransactions(parsed)
       },
       error: () => setError('File parse failed. Please try again!'),
     })
   }
 
-  // 📊 Summary cards data
+  // 📊 Summary data
   const summary = useMemo(() => {
     const totalSpent    = transactions.reduce((s, t) => s + t.debit, 0)
     const totalReceived = transactions.reduce((s, t) => s + t.credit, 0)
@@ -132,7 +117,6 @@ function Dashboard() {
     return { totalSpent, totalReceived, txnCount, avgSpend }
   }, [transactions])
 
-  // 🥧 Category wise spending — pie chart kosam
   const categoryData = useMemo(() => {
     const map = {}
     transactions.filter(t => t.debit > 0).forEach(t => {
@@ -143,7 +127,6 @@ function Dashboard() {
       .sort((a, b) => b.value - a.value)
   }, [transactions])
 
-  // 📅 Month wise spending — line chart kosam
   const monthlyData = useMemo(() => {
     const map = {}
     transactions.forEach(t => {
@@ -157,7 +140,6 @@ function Dashboard() {
       .map(m => ({ ...m, spent: Math.round(m.spent), received: Math.round(m.received) }))
   }, [transactions])
 
-  // 🔍 Filtered transactions — search + category + type
   const filtered = useMemo(() => {
     return transactions.filter(t => {
       const catOk    = filterCat  === 'All' || t.category === filterCat
@@ -167,37 +149,48 @@ function Dashboard() {
     })
   }, [transactions, filterCat, filterType, searchText])
 
-  // 🏷️ All categories for filter dropdown
   const allCategories = ['All', ...Object.keys(CATEGORIES), 'Others']
 
-  // 🎨 All inline styles
+  // 🎨 Styles — mobile responsive
   const S = {
     page: {
       minHeight: '100vh',
       backgroundColor: theme.bg,
       backgroundImage: `radial-gradient(ellipse 800px 500px at 50% 0%, ${theme.accent}10 0%, transparent 60%)`,
-      padding: '1.5rem',
+      padding: isMobile ? '1rem' : '1.5rem',
       color: theme.text,
     },
 
+    // 🔝 Navbar — mobile lo stack cheyyadam
     nav: {
       display: 'flex',
-      alignItems: 'center',
+      alignItems: isMobile ? 'flex-start' : 'center',
       justifyContent: 'space-between',
-      marginBottom: '2rem',
+      marginBottom: '1.5rem',
+      flexDirection: isMobile ? 'column' : 'row',
+      gap: isMobile ? '10px' : '0',
     },
 
     navTitle: {
-      fontSize: '1.25rem',
+      fontSize: isMobile ? '1rem' : '1.25rem',
       fontWeight: '700',
       color: theme.text,
       display: 'flex',
       alignItems: 'center',
       gap: '8px',
+      flexWrap: 'wrap',
+    },
+
+    // 🎨 Nav right side — mobile lo wrap cheyyadam
+    navRight: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      flexWrap: 'wrap',
     },
 
     logoutBtn: {
-      padding: '6px 16px',
+      padding: isMobile ? '5px 12px' : '6px 16px',
       borderRadius: '8px',
       fontSize: '12px',
       fontWeight: '500',
@@ -210,27 +203,27 @@ function Dashboard() {
     uploadBox: {
       border: `1.5px dashed ${theme.accent}60`,
       borderRadius: '16px',
-      padding: '2.5rem',
+      padding: isMobile ? '1.5rem 1rem' : '2.5rem',
       textAlign: 'center',
       backgroundColor: `${theme.accent}08`,
-      marginBottom: '2rem',
+      marginBottom: '1.5rem',
       cursor: 'pointer',
       width: '100%',
       boxSizing: 'border-box',
       display: 'block',
     },
 
-    uploadIcon:  { fontSize: '2.5rem', marginBottom: '0.75rem' },
+    uploadIcon:  { fontSize: isMobile ? '2rem' : '2.5rem', marginBottom: '0.75rem' },
 
     uploadTitle: {
-      fontSize: '1rem',
+      fontSize: isMobile ? '0.9rem' : '1rem',
       fontWeight: '600',
       color: theme.text,
       margin: '0 0 6px',
     },
 
     uploadSub: {
-      fontSize: '0.8rem',
+      fontSize: '0.75rem',
       color: theme.subtext,
       margin: '0 0 1rem',
     },
@@ -247,57 +240,59 @@ function Dashboard() {
       border: 'none',
     },
 
+    // 📊 Cards — mobile lo 2 columns
     cardsGrid: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-      gap: '1rem',
-      marginBottom: '2rem',
+      gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fit, minmax(200px, 1fr))',
+      gap: isMobile ? '0.75rem' : '1rem',
+      marginBottom: '1.5rem',
     },
 
     card: {
       backgroundColor: theme.cardBg,
       border: `0.5px solid ${theme.border}`,
       borderRadius: '14px',
-      padding: '1.25rem',
+      padding: isMobile ? '1rem' : '1.25rem',
     },
 
     cardLabel: {
-      fontSize: '11px',
+      fontSize: '10px',
       fontWeight: '500',
       color: theme.subtext,
       textTransform: 'uppercase',
       letterSpacing: '0.4px',
-      marginBottom: '8px',
+      marginBottom: '6px',
     },
 
     cardValue: {
-      fontSize: '1.5rem',
+      fontSize: isMobile ? '1.2rem' : '1.5rem',
       fontWeight: '700',
       color: theme.text,
     },
 
     cardSub: {
-      fontSize: '11px',
+      fontSize: '10px',
       color: theme.subtext,
       marginTop: '4px',
     },
 
+    // 📈 Charts — mobile lo single column
     chartsGrid: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+      gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(320px, 1fr))',
       gap: '1rem',
-      marginBottom: '2rem',
+      marginBottom: '1.5rem',
     },
 
     chartCard: {
       backgroundColor: theme.cardBg,
       border: `0.5px solid ${theme.border}`,
       borderRadius: '14px',
-      padding: '1.25rem',
+      padding: isMobile ? '1rem' : '1.25rem',
     },
 
     chartTitle: {
-      fontSize: '13px',
+      fontSize: '12px',
       fontWeight: '600',
       color: theme.text,
       marginBottom: '1rem',
@@ -305,12 +300,14 @@ function Dashboard() {
       letterSpacing: '0.3px',
     },
 
+    // 🔍 Filters — mobile lo vertical stack
     filtersRow: {
       display: 'flex',
-      gap: '10px',
+      gap: '8px',
       flexWrap: 'wrap',
       marginBottom: '1rem',
       alignItems: 'center',
+      flexDirection: isMobile ? 'column' : 'row',
     },
 
     select: {
@@ -322,54 +319,60 @@ function Dashboard() {
       border: `0.5px solid ${theme.border}`,
       outline: 'none',
       cursor: 'pointer',
+      width: isMobile ? '100%' : 'auto',
     },
 
     searchInput: {
       padding: '7px 12px',
       borderRadius: '8px',
-      fontSize: '13px',
+      fontSize: isMobile ? '16px' : '13px',
       backgroundColor: theme.inputBg,
       color: theme.text,
       border: `0.5px solid ${theme.border}`,
       outline: 'none',
-      flex: 1,
-      minWidth: '180px',
+      width: isMobile ? '100%' : 'auto',
+      flex: isMobile ? 'none' : 1,
+      minWidth: isMobile ? 'none' : '180px',
+      boxSizing: 'border-box',
     },
 
     tableWrap: {
       backgroundColor: theme.cardBg,
       border: `0.5px solid ${theme.border}`,
       borderRadius: '14px',
-      overflow: 'hidden',
+      overflow: isMobile ? 'auto' : 'hidden',
     },
 
+    // 📋 Table — mobile lo scroll cheyyadam
     tableHeader: {
       display: 'grid',
-      gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr',
-      padding: '10px 16px',
-      fontSize: '11px',
+      gridTemplateColumns: isMobile ? '2fr 1fr 1fr' : '1.5fr 1fr 1fr 1fr 1fr',
+      padding: '10px 12px',
+      fontSize: '10px',
       fontWeight: '500',
       color: theme.subtext,
       textTransform: 'uppercase',
       letterSpacing: '0.4px',
       borderBottom: `0.5px solid ${theme.border}`,
       backgroundColor: `${theme.accent}08`,
+      minWidth: isMobile ? '400px' : 'auto',
     },
 
     tableRow: {
       display: 'grid',
-      gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr',
-      padding: '10px 16px',
-      fontSize: '13px',
+      gridTemplateColumns: isMobile ? '2fr 1fr 1fr' : '1.5fr 1fr 1fr 1fr 1fr',
+      padding: '10px 12px',
+      fontSize: '12px',
       borderBottom: `0.5px solid ${theme.border}`,
       alignItems: 'center',
+      minWidth: isMobile ? '400px' : 'auto',
     },
 
     catBadge: () => ({
       display: 'inline-block',
-      padding: '2px 8px',
+      padding: '2px 6px',
       borderRadius: '20px',
-      fontSize: '11px',
+      fontSize: '10px',
       fontWeight: '500',
       background: `${theme.accent}20`,
       color: theme.accent,
@@ -378,7 +381,7 @@ function Dashboard() {
     errorBox: {
       padding: '0.75rem 1rem',
       borderRadius: '10px',
-      fontSize: '0.85rem',
+      fontSize: '0.8rem',
       color: '#f87171',
       backgroundColor: isDark ? '#1a0505' : '#fff0f0',
       border: '0.5px solid #7f1d1d',
@@ -387,7 +390,7 @@ function Dashboard() {
 
     emptyState: {
       textAlign: 'center',
-      padding: '3rem',
+      padding: '2rem',
       color: theme.subtext,
       fontSize: '0.875rem',
     },
@@ -406,8 +409,9 @@ function Dashboard() {
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '13px', color: theme.subtext }}>
+
+        <div style={S.navRight}>
+          <span style={{ fontSize: '12px', color: theme.subtext }}>
             👤 {user?.name || 'User'}
           </span>
           <button
@@ -436,7 +440,7 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* ❌ Error message */}
+      {/* ❌ Error */}
       {error && <div style={S.errorBox}>{error}</div>}
 
       {/* 📂 Upload box */}
@@ -446,20 +450,15 @@ function Dashboard() {
           <p style={S.uploadTitle}>Upload Your Bank Statement</p>
           <p style={S.uploadSub}>CSV format — SBI, HDFC, ICICI, Axis, Union Bank supported</p>
           <span style={S.uploadBtn}>Choose CSV File</span>
-          <input
-            type="file"
-            accept=".csv"
-            onChange={handleUpload}
-            style={{ display: 'none' }}
-          />
+          <input type="file" accept=".csv" onChange={handleUpload} style={{ display: 'none' }} />
         </label>
       )}
 
       {/* 📊 Full dashboard */}
       {transactions.length > 0 && (
         <>
-          {/* 🔄 Re-upload button */}
-          <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* 🔄 Re-upload */}
+          <div style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <label style={{ ...S.uploadBtn, fontSize: '12px', padding: '6px 14px' }}>
               📂 Upload New File
               <input type="file" accept=".csv" onChange={handleUpload} style={{ display: 'none' }} />
@@ -488,7 +487,7 @@ function Dashboard() {
             <div style={S.card}>
               <div style={S.cardLabel}>🔢 Transactions</div>
               <div style={S.cardValue}>{summary.txnCount}</div>
-              <div style={S.cardSub}>Total entries in file</div>
+              <div style={S.cardSub}>Total entries</div>
             </div>
             <div style={S.card}>
               <div style={S.cardLabel}>📈 Avg Spend</div>
@@ -502,16 +501,17 @@ function Dashboard() {
           {/* 📈 Charts */}
           <div style={S.chartsGrid}>
 
-            {/* 🥧 Category donut chart — clean legend */}
+            {/* 🥧 Pie chart */}
             <div style={S.chartCard}>
               <div style={S.chartTitle}>📊 Spending by Category</div>
-              <ResponsiveContainer width="100%" height={280}>
+              <ResponsiveContainer width="100%" height={isMobile ? 220 : 280}>
                 <PieChart>
                   <Pie
                     data={categoryData}
-                    cx="40%" cy="50%"
-                    outerRadius={90}
-                    innerRadius={50}
+                    cx={isMobile ? '50%' : '40%'}
+                    cy="50%"
+                    outerRadius={isMobile ? 70 : 90}
+                    innerRadius={isMobile ? 35 : 50}
                     dataKey="value"
                     labelLine={false}
                   >
@@ -528,33 +528,32 @@ function Dashboard() {
                       color: theme.text,
                     }}
                   />
-                  <Legend
-                    layout="vertical"
-                    align="right"
-                    verticalAlign="middle"
-                    iconType="circle"
-                    iconSize={8}
-                    formatter={(value, entry) =>
-                      `${value} — ₹${entry.payload.value.toLocaleString('en-IN')}`
-                    }
-                    wrapperStyle={{
-                      fontSize: '11px',
-                      color: theme.text,
-                      lineHeight: '22px',
-                    }}
-                  />
+                  {!isMobile && (
+                    <Legend
+                      layout="vertical"
+                      align="right"
+                      verticalAlign="middle"
+                      iconType="circle"
+                      iconSize={8}
+                      formatter={(value, entry) =>
+                        `${value} — ₹${entry.payload.value.toLocaleString('en-IN')}`
+                      }
+                      wrapperStyle={{ fontSize: '11px', color: theme.text, lineHeight: '22px' }}
+                    />
+                  )}
+                  {isMobile && <Legend wrapperStyle={{ fontSize: '10px', color: theme.text }} />}
                 </PieChart>
               </ResponsiveContainer>
             </div>
 
-            {/* 📅 Monthly line chart */}
+            {/* 📅 Line chart */}
             <div style={S.chartCard}>
               <div style={S.chartTitle}>📅 Monthly Trends</div>
-              <ResponsiveContainer width="100%" height={280}>
+              <ResponsiveContainer width="100%" height={isMobile ? 200 : 280}>
                 <LineChart data={monthlyData}>
                   <CartesianGrid strokeDasharray="3 3" stroke={theme.border} />
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: theme.subtext }} />
-                  <YAxis tick={{ fontSize: 11, fill: theme.subtext }} />
+                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: theme.subtext }} />
+                  <YAxis tick={{ fontSize: 10, fill: theme.subtext }} width={50} />
                   <Tooltip
                     formatter={(v) => `₹${v.toLocaleString('en-IN')}`}
                     contentStyle={{
@@ -571,14 +570,14 @@ function Dashboard() {
               </ResponsiveContainer>
             </div>
 
-            {/* 📊 Category bar chart — full width */}
-            <div style={{ ...S.chartCard, gridColumn: '1 / -1' }}>
+            {/* 📊 Bar chart */}
+            <div style={{ ...S.chartCard, gridColumn: isMobile ? '1' : '1 / -1' }}>
               <div style={S.chartTitle}>📊 Category Breakdown</div>
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={isMobile ? 180 : 220}>
                 <BarChart data={categoryData}>
                   <CartesianGrid strokeDasharray="3 3" stroke={theme.border} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: theme.subtext }} />
-                  <YAxis tick={{ fontSize: 11, fill: theme.subtext }} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: theme.subtext }} />
+                  <YAxis tick={{ fontSize: 10, fill: theme.subtext }} width={50} />
                   <Tooltip
                     formatter={(v) => `₹${v.toLocaleString('en-IN')}`}
                     contentStyle={{
@@ -614,41 +613,45 @@ function Dashboard() {
             </select>
           </div>
 
-          {/* 📋 Transactions table */}
+          {/* 📋 Table */}
           <div style={S.tableWrap}>
-            <div style={S.tableHeader}>
-              <span>Description</span>
-              <span>Date</span>
-              <span>Category</span>
-              <span>Debit</span>
-              <span>Credit</span>
-            </div>
-
-            {filtered.length === 0 ? (
-              <div style={S.emptyState}>No transactions found 🔍</div>
-            ) : (
-              filtered.slice(0, 100).map(t => (
-                <div key={t.id} style={S.tableRow}>
-                  <span style={{ color: theme.text, fontSize: '12px' }} title={t.description}>
-                    {t.description.slice(0, 35)}{t.description.length > 35 ? '...' : ''}
-                  </span>
-                  <span style={{ color: theme.subtext, fontSize: '12px' }}>{t.date}</span>
-                  <span><span style={S.catBadge()}>{t.category}</span></span>
-                  <span style={{ color: t.debit > 0 ? '#f87171' : theme.subtext, fontSize: '13px', fontWeight: '500' }}>
-                    {t.debit > 0 ? `₹${t.debit.toLocaleString('en-IN')}` : '—'}
-                  </span>
-                  <span style={{ color: t.credit > 0 ? theme.accent : theme.subtext, fontSize: '13px', fontWeight: '500' }}>
-                    {t.credit > 0 ? `₹${t.credit.toLocaleString('en-IN')}` : '—'}
-                  </span>
-                </div>
-              ))
-            )}
-
-            {filtered.length > 100 && (
-              <div style={{ ...S.emptyState, padding: '1rem' }}>
-                Showing 100 of {filtered.length} transactions
+            <div style={{ overflowX: isMobile ? 'auto' : 'visible' }}>
+              <div style={S.tableHeader}>
+                <span>Description</span>
+                <span>Date</span>
+                {!isMobile && <span>Category</span>}
+                <span>Debit</span>
+                {!isMobile && <span>Credit</span>}
               </div>
-            )}
+
+              {filtered.length === 0 ? (
+                <div style={S.emptyState}>No transactions found 🔍</div>
+              ) : (
+                filtered.slice(0, 100).map(t => (
+                  <div key={t.id} style={S.tableRow}>
+                    <span style={{ color: theme.text, fontSize: '11px' }} title={t.description}>
+                      {t.description.slice(0, isMobile ? 20 : 35)}{t.description.length > (isMobile ? 20 : 35) ? '...' : ''}
+                    </span>
+                    <span style={{ color: theme.subtext, fontSize: '11px' }}>{t.date}</span>
+                    {!isMobile && <span><span style={S.catBadge()}>{t.category}</span></span>}
+                    <span style={{ color: t.debit > 0 ? '#f87171' : theme.subtext, fontSize: '12px', fontWeight: '500' }}>
+                      {t.debit > 0 ? `₹${t.debit.toLocaleString('en-IN')}` : '—'}
+                    </span>
+                    {!isMobile && (
+                      <span style={{ color: t.credit > 0 ? theme.accent : theme.subtext, fontSize: '12px', fontWeight: '500' }}>
+                        {t.credit > 0 ? `₹${t.credit.toLocaleString('en-IN')}` : '—'}
+                      </span>
+                    )}
+                  </div>
+                ))
+              )}
+
+              {filtered.length > 100 && (
+                <div style={{ ...S.emptyState, padding: '1rem' }}>
+                  Showing 100 of {filtered.length} transactions
+                </div>
+              )}
+            </div>
           </div>
         </>
       )}

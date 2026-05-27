@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
+import useWindowSize from '../hooks/useWindowSize'
 
 function Login() {
   const { theme, switchTheme, currentTheme } = useTheme() // 🎨 theme + switcher
   const { login } = useAuth()
   const navigate = useNavigate()
+  const { isMobile } = useWindowSize() // 📱 mobile check
 
   // 📋 Form state
   const [formData, setFormData] = useState({ email: '', password: '' })
@@ -51,7 +53,7 @@ function Login() {
   // 🌗 dark theme check
   const isDark = theme.name === 'greenDark' || theme.name === 'blueDark'
 
-  // 🎨 All inline styles
+  // 🎨 All inline styles — mobile responsive tho
   const S = {
     // 📄 Full page
     page: {
@@ -59,26 +61,26 @@ function Login() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '1rem',
+      padding: isMobile ? '1rem' : '2rem',
       backgroundColor: theme.bg,
       backgroundImage: `radial-gradient(ellipse 600px 400px at 50% 30%, ${theme.accent}14 0%, transparent 70%)`,
       position: 'relative',
     },
 
-    // 🎨 Theme switcher — top right corner
+    // 🎨 Theme switcher — top right
     themeSwitcher: {
       position: 'fixed',
-      top: '16px',
-      right: '16px',
+      top: '12px',
+      right: '12px',
       display: 'flex',
-      gap: '8px',
+      gap: '6px',
       zIndex: 100,
     },
 
     themeBtn: (active) => ({
-      padding: '6px 14px',
+      padding: isMobile ? '4px 10px' : '6px 14px',
       borderRadius: '8px',
-      fontSize: '12px',
+      fontSize: isMobile ? '11px' : '12px',
       fontWeight: '500',
       border: `0.5px solid ${theme.accent}`,
       backgroundColor: active ? theme.accent : 'transparent',
@@ -89,11 +91,11 @@ function Login() {
     // 🃏 Login card
     card: {
       width: '100%',
-      maxWidth: '420px',
+      maxWidth: isMobile ? '100%' : '420px',
       backgroundColor: theme.cardBg,
       border: `0.5px solid ${theme.border}`,
-      borderRadius: '20px',
-      padding: '2.5rem 2.25rem',
+      borderRadius: isMobile ? '16px' : '20px',
+      padding: isMobile ? '1.75rem 1.25rem' : '2.5rem 2.25rem',
       boxShadow: theme.shadow,
       position: 'relative',
     },
@@ -101,15 +103,15 @@ function Login() {
     // 🟢 Secure badge
     badge: {
       position: 'absolute',
-      top: '16px',
-      right: '16px',
+      top: '14px',
+      right: '14px',
       display: 'flex',
       alignItems: 'center',
       gap: '5px',
       background: `${theme.accent}18`,
       border: `0.5px solid ${theme.accent}40`,
       borderRadius: '20px',
-      padding: '4px 10px',
+      padding: '3px 8px',
       fontSize: '10px',
       color: theme.accent,
     },
@@ -124,23 +126,23 @@ function Login() {
     // 🏷️ Header
     header: {
       textAlign: 'center',
-      marginBottom: '2rem',
+      marginBottom: isMobile ? '1.5rem' : '2rem',
     },
 
     iconWrap: {
-      width: '52px',
-      height: '52px',
+      width: isMobile ? '44px' : '52px',
+      height: isMobile ? '44px' : '52px',
       borderRadius: '14px',
       background: `linear-gradient(135deg, ${theme.accent}, ${theme.accent}88)`,
       display: 'inline-flex',
       alignItems: 'center',
       justifyContent: 'center',
-      fontSize: '24px',
-      marginBottom: '1rem',
+      fontSize: isMobile ? '20px' : '24px',
+      marginBottom: '0.75rem',
     },
 
     title: {
-      fontSize: '1.4rem',
+      fontSize: isMobile ? '1.2rem' : '1.4rem',
       fontWeight: '700',
       color: theme.text,
       margin: '0 0 6px',
@@ -182,7 +184,7 @@ function Login() {
       width: '100%',
       padding: '0.75rem 1rem 0.75rem 2.5rem',
       borderRadius: '10px',
-      fontSize: '0.875rem',
+      fontSize: isMobile ? '16px' : '0.875rem', // 📱 16px — iOS zoom fix
       outline: 'none',
       backgroundColor: theme.inputBg,
       color: theme.text,
@@ -220,6 +222,8 @@ function Login() {
       alignItems: 'center',
       justifyContent: 'space-between',
       marginBottom: '1.25rem',
+      flexWrap: 'wrap',
+      gap: '8px',
     },
 
     remember: {
@@ -241,7 +245,7 @@ function Login() {
     // 🚀 Submit button
     btn: {
       width: '100%',
-      padding: '0.85rem',
+      padding: isMobile ? '0.9rem' : '0.85rem',
       borderRadius: '10px',
       fontSize: '0.9rem',
       fontWeight: '600',
@@ -272,16 +276,10 @@ function Login() {
 
       {/* 🎨 Theme switcher — top right fixed */}
       <div style={S.themeSwitcher}>
-        <button
-          onClick={() => switchTheme('light')}
-          style={S.themeBtn(currentTheme === 'light')}
-        >
+        <button onClick={() => switchTheme('light')} style={S.themeBtn(currentTheme === 'light')}>
           🍦 Light
         </button>
-        <button
-          onClick={() => switchTheme('greenDark')}
-          style={S.themeBtn(currentTheme === 'greenDark')}
-        >
+        <button onClick={() => switchTheme('greenDark')} style={S.themeBtn(currentTheme === 'greenDark')}>
           🖤 Dark
         </button>
       </div>
@@ -337,11 +335,7 @@ function Login() {
                 required
                 style={S.input}
               />
-              <button
-                type="button"
-                style={S.eyeBtn}
-                onClick={() => setShowPass(!showPass)}
-              >
+              <button type="button" style={S.eyeBtn} onClick={() => setShowPass(!showPass)}>
                 {showPass ? '🙈' : '👁️'}
               </button>
             </div>
