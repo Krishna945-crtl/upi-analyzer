@@ -11,10 +11,14 @@ from auth import hash_password, verify_password, create_token  # 🔐 auth funct
 # 🏗️ FastAPI app object create cheyyadam — idi main entry point
 app = FastAPI(title="UPI Analyzer API", version="1.0.0")
 
-# 🌐 CORS setup — React frontend ki allow cheyyadam
+# 🌐 CORS — Vercel frontend allow cheyyadam
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "https://upi-analyzer.vercel.app",
+        "https://upi-analyzer-hmh61ku8j-krishna945-crtls-projects.vercel.app",
+    ],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
