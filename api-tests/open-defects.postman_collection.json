@@ -1,0 +1,441 @@
+{
+  "info": {
+    "_postman_id": "00000000-0000-0000-0000-000000000002",
+    "name": "UPI Analyzer API — Open Defects",
+    "description": "One request per logged defect (see BUG_REPORTS.md). Each asserts the EXPECTED behaviour, so it FAILS while the bug is open and passes once it is fixed. Not part of the CI run.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "bugEmail1",
+      "value": ""
+    },
+    {
+      "key": "bugEmail2",
+      "value": ""
+    },
+    {
+      "key": "bugEmail3",
+      "value": ""
+    },
+    {
+      "key": "bugEmail4",
+      "value": ""
+    },
+    {
+      "key": "longName",
+      "value": ""
+    },
+    {
+      "key": "bugToken",
+      "value": ""
+    },
+    {
+      "key": "oddToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "BUG-01 One-character password is accepted",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "register"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Weak\",\n  \"email\": \"{{bugEmail1}}\",\n  \"password\": \"1\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"bugEmail1\", `weak.${Date.now()}@test.com`);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 422\", () => pm.response.to.have.status(422));pm.test(\"Error mentions password length\", () => pm.expect(pm.response.json().detail || \"\").to.match(/password/i));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "BUG-02 Numeric password crashes the server (500)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "register"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"name\": \"Num\", \"email\": \"{{bugEmail2}}\", \"password\": 123456}"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"bugEmail2\", `num.${Date.now()}@test.com`);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Not a server error\", () => pm.expect(pm.response.code).to.be.below(500));",
+              "pm.test(\"Status is 422\", () => pm.response.to.have.status(422));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "BUG-03 No maximum length on name (5,000 chars accepted)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "register"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{longName}}\",\n  \"email\": \"{{bugEmail3}}\",\n  \"password\": \"Secret@123\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"longName\", \"N\".repeat(5000));",
+              "pm.collectionVariables.set(\"bugEmail3\", `long.${Date.now()}@test.com`);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 422\", () => pm.response.to.have.status(422));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "BUG-04 Register rejects email with surrounding spaces (login accepts it)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/register",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "auth",
+            "register"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Spaced\",\n  \"email\": \" {{bugEmail4}} \",\n  \"password\": \"Secret@123\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set(\"bugEmail4\", `spaced.${Date.now()}@test.com`);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status is 201\", () => pm.response.to.have.status(201));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "BUG-05 Negative amount is silently saved as 0",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bugToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/transactions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "transactions"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transactions\": [\n    {\n      \"date\": \"01/03/2026\",\n      \"description\": \"REFUND\",\n      \"debit\": -500\n    }\n  ]\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// fresh user for the defect run",
+              "pm.sendRequest({ url: pm.environment.get(\"baseUrl\") + \"/auth/register\", method: \"POST\",",
+              "  header: { \"Content-Type\": \"application/json\" },",
+              "  body: { mode: \"raw\", raw: JSON.stringify({ name: \"Bug\", email: `bug.${Date.now()}@test.com`, password: \"Secret@123\" }) }",
+              "}, (err, res) => pm.collectionVariables.set(\"bugToken\", res.json().token));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Negative amount is rejected (422) instead of being zeroed\", () => pm.response.to.have.status(422));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "BUG-06 Invalid date accepted; monthly totals stop matching the total",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bugToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/transactions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "transactions"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transactions\": [\n    {\n      \"date\": \"hello\",\n      \"description\": \"BAD DATE\",\n      \"debit\": 10\n    }\n  ]\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Row with date \\\"hello\\\" is rejected\", () => pm.response.to.have.status(422));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "BUG-07 Row with both debit and credit is accepted",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{bugToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/transactions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "transactions"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transactions\": [\n    {\n      \"date\": \"01/03/2026\",\n      \"description\": \"BOTH\",\n      \"debit\": 100,\n      \"credit\": 200\n    }\n  ]\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Ambiguous row is rejected\", () => pm.response.to.have.status(422));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "BUG-08 Valid token with a non-ObjectId user id crashes (500)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{oddToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/transactions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "transactions"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const b64url = w => CryptoJS.enc.Base64.stringify(w).replace(/=+$/, '').replace(/\\+/g, '-').replace(/\\//g, '_');",
+              "const sign = (payload, secret) => {",
+              "  const head = b64url(CryptoJS.enc.Utf8.parse(JSON.stringify({ alg: 'HS256', typ: 'JWT' })));",
+              "  const body = b64url(CryptoJS.enc.Utf8.parse(JSON.stringify(payload)));",
+              "  return `${head}.${body}.${b64url(CryptoJS.HmacSHA256(`${head}.${body}`, secret))}`;",
+              "};",
+              "",
+              "// needs the dev/test JWT secret (environment variable jwtSecret)",
+              "pm.collectionVariables.set(\"oddToken\", sign({ sub: \"not-an-object-id\" }, pm.environment.get(\"jwtSecret\")));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Not a server error\", () => pm.expect(pm.response.code).to.be.below(500));",
+              "pm.test(\"Status is 401\", () => pm.response.to.have.status(401));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "BUG-09 Lower-case 'bearer' scheme is rejected",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "bearer {{bugToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/transactions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "transactions"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Auth scheme is case-insensitive (RFC 7235)\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

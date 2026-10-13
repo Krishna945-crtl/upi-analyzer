@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Papa from 'papaparse'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -8,40 +8,14 @@ import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
 import useWindowSize from '../hooks/useWindowSize'
 import API_URL from '../config'
-
-// 🏷️ Keywords tో auto-category detect cheyyadam
-const CATEGORIES = {
-  Food:          ['swiggy', 'zomato', 'hotel', 'restaurant', 'cafe', 'food', 'eat', 'pizza', 'burger', 'biryani'],
-  Transport:     ['uber', 'ola', 'rapido', 'petrol', 'fuel', 'irctc', 'railway', 'bus', 'auto'],
-  Shopping:      ['amazon', 'flipkart', 'myntra', 'meesho', 'shop', 'store', 'mart'],
-  Recharge:      ['airtel', 'jio', 'vodafone', 'recharge', 'mobile', 'broadband'],
-  Entertainment: ['netflix', 'hotstar', 'spotify', 'youtube', 'prime', 'zee5', 'cinema'],
-  Health:        ['pharmacy', 'hospital', 'clinic', 'doctor', 'medicine', 'apollo', 'medplus'],
-  Utilities:     ['electricity', 'water', 'gas', 'bill', 'bescom', 'tpcc'],
-  Transfer:      ['upi', 'neft', 'imps', 'transfer', 'sent', 'paid'],
-}
+import { CATEGORIES, toTransactions } from '../utils/statement'
 
 // 🎨 Pie chart colors
 const PIE_COLORS = ['#22c55e','#16a34a','#4ade80','#86efac','#bbf7d0','#059669','#10b981','#34d399']
 
-// 🔍 Category detect cheyyadam
-function detectCategory(description) {
-  const lower = (description || '').toLowerCase()
-  for (const [cat, keywords] of Object.entries(CATEGORIES)) {
-    if (keywords.some(k => lower.includes(k))) return cat
-  }
-  return 'Others'
-}
-
-// 💰 Amount parse cheyyadam
-function parseAmount(val) {
-  if (!val) return 0
-  return parseFloat(String(val).replace(/,/g, '')) || 0
-}
-
 function Dashboard() {
   const { theme, switchTheme, currentTheme } = useTheme()
-  const { user, logout } = useAuth()
+  const { user, token, logout } = useAuth()
   const { isMobile } = useWindowSize() // 📱 mobile check
 
   const [transactions, setTransactions] = useState([])
@@ -50,6 +24,35 @@ function Dashboard() {
   const [filterCat, setFilterCat]       = useState('All')
   const [filterType, setFilterType]     = useState('All')
   const [searchText, setSearchText]     = useState('')
+  const [syncMsg, setSyncMsg]           = useState('')
+
+  // ☁️ login ayyaka, last saved statement MongoDB nunchi load cheyyadam
+  useEffect(() => {
+    if (!token) return
+    fetch(`${API_URL}/transactions`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (data?.transactions?.length) {
+          setTransactions(data.transactions)
+          setFileName(data.fileName)
+          setSyncMsg('☁️ Loaded from your account')
+        }
+      })
+      .catch(() => {}) // backend lo save feature lekapothe silent ga skip
+  }, [token])
+
+  // 💾 parse ayina statement ni account lo save cheyyadam
+  function saveToAccount(rows, name) {
+    if (!token) return
+    setSyncMsg('Saving...')
+    fetch(`${API_URL}/transactions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ fileName: name, transactions: rows }),
+    })
+      .then(res => setSyncMsg(res.ok ? '☁️ Saved to your account' : ''))
+      .catch(() => setSyncMsg(''))
+  }
 
   const isDark = theme.name === 'greenDark' || theme.name === 'blueDark'
 
@@ -64,46 +67,10 @@ function Dashboard() {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        const rows = results.data
-        if (!rows.length) { setError('CSV file is empty!'); return }
-
-        const cols      = Object.keys(rows[0]).map(c => c.trim())
-        const dateCol   = cols.find(c => /date/i.test(c))
-        const descCol   = cols.find(c => /desc|narration|particular|details|remarks/i.test(c))
-        const debitCol  = cols.find(c => /^debit$/i.test(c) || /withdrawal/i.test(c))
-        const creditCol = cols.find(c => /^credit$/i.test(c) || /deposit/i.test(c))
-        const amountCol = cols.find(c => /^amount$/i.test(c))
-
-        if (!dateCol) { setError('CSV format not recognized! Date column is required.'); return }
-
-        const parsed = rows.map((row, i) => {
-          let debit = 0, credit = 0
-
-          if (amountCol && !debitCol) {
-            const raw   = String(row[amountCol] || '').trim()
-            const match = raw.match(/([\d,]+\.?\d*)\s*\((Dr|Cr)\)/i)
-            if (match) {
-              const amt = parseFloat(match[1].replace(/,/g, ''))
-              if (match[2].toLowerCase() === 'dr') debit = amt
-              else credit = amt
-            }
-          } else {
-            debit  = parseAmount(row[debitCol])
-            credit = parseAmount(row[creditCol])
-          }
-
-          return {
-            id: i,
-            date:        (row[dateCol] || '').trim(),
-            description: (row[descCol] || 'Unknown').trim(),
-            debit, credit,
-            category: detectCategory(row[descCol]),
-            type:     debit > 0 ? 'Debit' : 'Credit',
-          }
-        }).filter(t => t.date)
-
-        if (!parsed.length) { setError('No valid transactions found in CSV!'); return }
+        const { transactions: parsed, error: parseError } = toTransactions(results.data)
+        if (parseError) { setError(parseError); return }
         setTransactions(parsed)
+        saveToAccount(parsed, file.name)
       },
       error: () => setError('File parse failed. Please try again!'),
     })
@@ -407,6 +374,11 @@ function Dashboard() {
           {fileName && (
             <span style={{ fontSize: '11px', color: theme.subtext, fontWeight: '400' }}>
               — {fileName}
+            </span>
+          )}
+          {syncMsg && (
+            <span style={{ fontSize: '11px', color: theme.subtext, fontWeight: '400' }}>
+              {syncMsg}
             </span>
           )}
         </div>

@@ -1,0 +1,25 @@
+name: docker compose smoke test
+
+on:
+  push:
+    paths: ['server/**', 'frontend/**', 'docker-compose.yml', '.github/workflows/docker.yml']
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start web + api + mongo
+        run: docker compose up -d --build --wait
+      - name: API answers and a user can register
+        run: |
+          curl -fsS http://localhost:8000/
+          curl -fsS -X POST http://localhost:8000/auth/register \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"CI","email":"ci@example.com","password":"secret123"}'
+      - name: Web app is served by nginx
+        run: curl -fsS http://localhost:5173/ | grep -q '<div id="root">'
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs
+      - run: docker compose down -v
